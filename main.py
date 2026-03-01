@@ -1,4 +1,3 @@
-
 import asyncio
 import os
 import time
@@ -17,13 +16,13 @@ ROOM_NAME = os.getenv("ROOM_NAME")
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")
 
 if not OPENAI_KEY:
-    raise Exception("OPENAI_API_KEY missing in .env")
+    raise Exception("OPENAI_API_KEY missing in .env file")
 
 client = OpenAI(api_key=OPENAI_KEY)
 
 SAMPLE_RATE = 16000
 CHANNELS = 1
-FRAME_DURATION = 20  # ms
+FRAME_DURATION = 20  # milliseconds
 FRAME_SIZE = int(SAMPLE_RATE * FRAME_DURATION / 1000) * 2
 
 vad = webrtcvad.Vad(2)
@@ -34,8 +33,6 @@ last_user_audio = time.time()
 audio_buffer = bytearray()
 
 
-# ================= TOKEN =================
-
 def generate_token(identity):
     return (
         AccessToken(API_KEY, API_SECRET)
@@ -45,8 +42,6 @@ def generate_token(identity):
         .to_jwt()
     )
 
-
-# ================= STT =================
 
 async def speech_to_text(pcm_data):
     with open("temp.wav", "wb") as f:
@@ -60,8 +55,6 @@ async def speech_to_text(pcm_data):
     return transcript.text
 
 
-# ================= TTS =================
-
 async def text_to_speech(text):
     response = client.audio.speech.create(
         model="gpt-4o-mini-tts",
@@ -72,8 +65,6 @@ async def text_to_speech(text):
     return response.content
 
 
-# ================= STREAM AUDIO =================
-
 async def stream_audio(source, audio_bytes):
     global is_speaking, user_speaking
 
@@ -81,9 +72,9 @@ async def stream_audio(source, audio_bytes):
 
     for i in range(0, len(audio_bytes), FRAME_SIZE):
 
-        # INTERRUPT CHECK
+        # Stop immediately if user starts speaking
         if user_speaking:
-            print("🔴 Interrupted by user")
+            print("User interrupted. Stopping playback.")
             break
 
         chunk = audio_bytes[i:i + FRAME_SIZE]
@@ -109,8 +100,6 @@ async def play_audio(source, text):
     await stream_audio(source, audio_bytes)
 
 
-# ================= SILENCE MONITOR =================
-
 async def silence_monitor(source):
     global last_user_audio
 
@@ -118,12 +107,10 @@ async def silence_monitor(source):
         await asyncio.sleep(5)
 
         if not is_speaking and time.time() - last_user_audio > 20:
-            print("⏳ Silence detected")
+            print("No speech detected for 20 seconds.")
             await play_audio(source, "Are you still there?")
             last_user_audio = time.time()
 
-
-# ================= MAIN =================
 
 async def main():
     global user_speaking, last_user_audio, audio_buffer
@@ -132,7 +119,7 @@ async def main():
     token = generate_token("voice-agent")
 
     await room.connect(LIVEKIT_URL, token)
-    print("✅ Connected")
+    print("Connected to LiveKit room.")
 
     source = rtc.AudioSource(SAMPLE_RATE, CHANNELS)
     track = rtc.LocalAudioTrack.create_audio_track("agent-audio", source)
@@ -140,7 +127,7 @@ async def main():
 
     @room.on("track_subscribed")
     def on_track(track, publication, participant):
-        print("🎤 Subscribed to user audio")
+        print("Subscribed to remote audio track.")
 
         async def read_audio():
             global user_speaking, last_user_audio, audio_buffer
